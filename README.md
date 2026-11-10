@@ -1,6 +1,6 @@
 # Sobel 3x3: C sequencial e CUDA
 
-Este projeto implementa a **mesma** detecção de bordas por Sobel em C e CUDA.
+Este projeto implementa detecção de bordas por Sobel em C e CUDA.
 
 ## Teste rápido
 
@@ -24,14 +24,30 @@ No Windows, use um terminal com `gcc`, `nvcc` e GNU Make no `PATH`. Se necessár
 - NVIDIA CUDA Toolkit (`nvcc`) e GPU NVIDIA compatível com CUDA para a versão GPU.
 - Python 3 e Pillow somente para os testes que usam PNG/JPG/JPEG/TIFF.
 
-## Organização das imagens
+## Organização de arquivos e pastas
 
 ```text
-images/
-├── png-input/   # imagens PNG originais
-├── png-output/  # resultados visualizáveis em PNG
-├── pgm-input/   # imagens PGM usadas pelos executáveis C/CUDA
-└── pgm-output/  # resultados PGM dos testes e benchmarks
+.
+├── images/
+│   ├── png-input/       # imagens PNG originais
+│   ├── png-output/      # resultados PNG visualizáveis
+│   ├── pgm-input/       # entradas PGM para os executáveis
+│   └── pgm-output/      # resultados PGM dos testes e benchmarks
+├── notebooks/
+│   └── sobel_cuda_colab.ipynb  # execução opcional no Google Colab
+├── scripts/
+│   ├── processar_imagem.py     # PNG/JPG/TIFF -> Sobel -> PNG/JPG
+│   ├── gerar_imagem.py         # cria imagens PGM sintéticas
+│   └── comparar.py              # compara duas imagens PGM
+├── src/
+│   ├── sobel_seq.c             # implementação sequencial em C
+│   ├── sobel_cuda.cu           # implementação paralela em CUDA
+│   ├── pgm.h                   # leitura e escrita de PGM P5
+│   └── sobel_seq / sobel_cuda  # executáveis gerados pela compilação
+├── cuda_content_learned/       # exemplos e material CUDA da disciplina
+├── graphics-material/          # material complementar da disciplina
+├── Makefile
+└── README.md
 ```
 
 ## Teste rápido com PNG (opcional)
