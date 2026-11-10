@@ -5,13 +5,24 @@
 // CUDA 1: disponibiliza kernels e memória unificada
 #include <cuda_runtime.h>
 #include <math.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <time.h>
+#endif
 #include "pgm.h"
 
 static double agora_segundos(void) {
+#ifdef _WIN32
+    LARGE_INTEGER frequencia, contador;
+    QueryPerformanceFrequency(&frequencia);
+    QueryPerformanceCounter(&contador);
+    return (double)contador.QuadPart / (double)frequencia.QuadPart;
+#else
     struct timespec t;
     clock_gettime(CLOCK_MONOTONIC, &t);
     return (double)t.tv_sec + (double)t.tv_nsec * 1e-9;
+#endif
 }
 
 // CUDA 2: __global__ faz esta função executar na GPU.
@@ -98,19 +109,18 @@ int main(int argc, char **argv) {
     cudaDeviceSynchronize();
 
     inicio = agora_segundos();
-    for (int i = 0; i < repeticoes; ++i)
-        
+    for (int i = 0; i < repeticoes; ++i) {
         // CUDA 8: a chamada <<<...>>> inicia o kernel na GPU
         sobel_cuda<<<numero_de_blocos, threads_por_bloco>>>(
             entrada.pixels, saida.pixels, entrada.largura, entrada.altura);
-    
-    // CUDA 9: espera o kernel terminar antes de encerrar a medição
-    cudaDeviceSynchronize();
+        // CUDA 9: cada repeticao espera o kernel terminar antes da proxima.
+        cudaDeviceSynchronize();
+    }
     fim = agora_segundos();
 
     printf("Imagem: %d x %d pixels\n", entrada.largura, entrada.altura);
     printf("Repeticoes: %d\n", repeticoes);
-    printf("Tempo medio GPU (kernel + sincronizacao): %.6f ms\n",
+    printf("Tempo medio GPU (kernel + sincronizacao por repeticao): %.6f ms\n",
            1000.0 * (fim - inicio) / repeticoes);
 
     ok = escrever_pgm(argv[2], &saida);

@@ -2,14 +2,31 @@
 
 Este projeto implementa a **mesma** detecção de bordas por Sobel em C e CUDA.
 
-- `src/sobel_seq.c`: cálculo sequencial em CPU.
-- `src/sobel_cuda.cu`: um pixel de saída por thread CUDA, em uma grade unidimensional.
-- `src/pgm.h`: leitura e escrita compartilhada do formato PGM binário de 8 bits.
-- `pics-in/`: imagens de entrada coloridas.
-- `pics-out/`: imagens produzidas pelo Sobel.
-- `scripts/gerar_imagem.py`: cria imagens sintéticas de tamanhos diferentes.
-- `scripts/comparar.py`: compara as imagens de saída, tolerando diferenças de arredondamento de até 1 nível de cinza.
-- `scripts/processar_imagem.py`: aplica o Sobel a PNG/JPG/JPEG/TIFF e gera uma imagem final visualizável.
+## Teste rápido
+
+Execute os comandos abaixo **na raiz do projeto**. Eles usam a primeira imagem disponível, `pics-in/4.1.01.png`, e mostram o tempo médio no terminal. Os resultados serão gravados em `pics-out/4.1.01_cpu.png` e `pics-out/4.1.01_gpu.png`.
+
+```bash
+# 1. Compilar a versão CPU
+make cpu
+
+# 2. Rodar a versão CPU
+python3 scripts/processar_imagem.py pics-in/pic1.png --modo cpu --saida pic1_cpu.png --sobrescrever
+
+# 3. Compilar a versão GPU
+make gpu
+
+# 4. Rodar a versão GPU
+python3 scripts/processar_imagem.py pics-in/pic1.png --modo gpu --saida pic1_gpu.png --sobrescrever
+```
+
+No Windows, execute em um terminal no qual `gcc`, `nvcc`, GNU Make e Python estejam no `PATH`. Se os comandos instalados se chamarem `mingw32-make` e `py`, substitua apenas `make` por `mingw32-make` e `python3` por `py` nos quatro comandos. No macOS, o teste de CPU funciona normalmente; o teste de GPU requer CUDA e, portanto, uma GPU NVIDIA compatível — algo que os Macs atuais não oferecem.
+
+## Requisitos
+
+- Um compilador C compatível com C11 (`gcc`) e GNU Make para a versão CPU.
+- NVIDIA CUDA Toolkit (`nvcc`) e GPU NVIDIA compatível com CUDA para a versão GPU.
+- Python 3 e Pillow para processar PNG/JPG/JPEG/TIFF.
 
 ## O algoritmo: filtro de Sobel 3x3
 
@@ -43,88 +60,43 @@ As duas versões produzem a mesma imagem e aplicam exatamente as máscaras acima
 
 A implementação CUDA usa memória unificada (`cudaMallocManaged`), cada thread lê diretamente a sua vizinhança 3x3 e a CPU sincroniza antes de usar o resultado. Ela prioriza a clareza e a equivalência com a versão sequencial, deixando o uso de memória compartilhada como uma otimização posterior.
 
-## Requisitos
+## Outros comandos de terminal
 
-- GCC (C11) e `make` para a versão sequencial.
-- NVIDIA CUDA Toolkit (`nvcc`) e GPU NVIDIA compatível com CUDA para a versão paralela.
-- Python 3 (biblioteca padrão) para gerar imagens de teste e comparar saídas.
-- Pillow para usar PNG/JPG/JPEG/TIFF com `scripts/processar_imagem.py`.
-
-Instale o Pillow uma única vez, se necessário:
+### Instalar Pillow
 
 ```bash
+# Linux/macOS
 python3 -m pip install Pillow
+
+# Windows
+py -m pip install Pillow
 ```
 
-## Organização
-
-- `src/`: código-fonte C/CUDA, cabeçalho compartilhado e executáveis gerados.
-- `pics-in/`: imagens de entrada (PNG, JPG, JPEG, TIFF ou PGM).
-- `pics-out/`: imagens de saída (PNG, JPG ou JPEG).
-- `scripts/`: utilitários Python para gerar imagens e comparar resultados.
-- Raiz: `Makefile`, `README.md` e os executáveis gerados pela compilação.
-
-## Compilar
+### Compilar as duas versões
 
 ```bash
-make cpu       # GCC, compila apenas a versão sequencial
-make gpu       # nvcc, compila apenas a versão CUDA
-# ou: make      # compila as duas
+make
 ```
 
-Sem `make`:
+### Processar outra imagem
+
+Troque `minha_foto.png` pelo arquivo desejado. O argumento opcional `--repeticoes` define quantas execuções entram na média (padrão: 10).
 
 ```bash
-gcc -O3 -std=c11 src/sobel_seq.c -o src/sobel_seq -lm
-nvcc -O3 src/sobel_cuda.cu -o src/sobel_cuda
+python3 scripts/processar_imagem.py pics-in/minha_foto.png --modo cpu --repeticoes 30
+python3 scripts/processar_imagem.py pics-in/minha_foto.png --modo gpu --repeticoes 30
 ```
 
-## Executar
+Para escolher o nome da saída ou substituir uma existente:
 
 ```bash
-make teste-cpu
-make teste-gpu
-python3 scripts/comparar.py pics-out/saida_seq.png pics-out/saida_cuda.png
-```
-
-O último argumento é o número de repetições; se omitido, vale 10. As imagens geradas são arquivos PGM P5 (grayscale 8 bits, `maxval=255`). A borda externa de um pixel é preenchida com zero. Na aplicação sequencial e CUDA, a magnitude é `sqrt(Gx*Gx + Gy*Gy)`, saturada em 255 e arredondada para o inteiro mais próximo. Pequenas diferenças numéricas de 1 tom de cinza podem surgir por arredondamento em CPU/GPU.
-
-## Converter suas imagens na CPU
-
-Para aplicar o Sobel às suas imagens usando **apenas a CPU**, execute os comandos abaixo a partir da raiz do projeto. Troque `minha_foto.jpg` pelo nome do seu arquivo (PNG, JPG, JPEG ou TIFF). A imagem pode ficar em `pics-in/`, como no exemplo, ou em outro caminho válido.
-
-```bash
-# 1. Compile a versão sequencial (CPU); basta fazer uma vez após cada alteração no código.
-make cpu
-
-# 2. Converta e processe a imagem. O modo padrão do script já é CPU.
-python3 scripts/processar_imagem.py pics-in/minha_foto.jpg
-```
-
-O resultado será salvo como `pics-out/minha_foto_sobel.png`. O script converte a entrada para tons de cinza em um PGM temporário, executa o Sobel sequencial e remove os arquivos temporários ao terminar.
-
-Exemplos equivalentes para outros formatos:
-
-```bash
-python3 scripts/processar_imagem.py pics-in/minha_foto.png
-python3 scripts/processar_imagem.py pics-in/minha_foto.tiff
-```
-
-Para usar a GPU, compile-a e selecione o modo correspondente:
-
-```bash
-make gpu
-python3 scripts/processar_imagem.py pics-in/foto.png --modo gpu --repeticoes 30
-```
-
-Por padrão, o script não substitui uma saída existente. Para escolher o nome do resultado ou permitir a substituição, use:
-
-```bash
-python3 scripts/processar_imagem.py pics-in/foto.jpeg \
+python3 scripts/processar_imagem.py pics-in/minha_foto.png --modo cpu \
   --saida bordas.png --sobrescrever
 ```
 
-## Benchmark com tamanhos diferentes
+### Benchmark com imagens PGM
+
+No Windows, use `py` no lugar de `python3` e `src\sobel_seq.exe` / `src\sobel_cuda.exe` no lugar dos executáveis mostrados abaixo.
 
 ```bash
 python3 scripts/gerar_imagem.py 1024 1024 pics-in/imagem_1024.pgm
@@ -135,7 +107,7 @@ python3 scripts/gerar_imagem.py 4096 4096 pics-in/imagem_4096.pgm
 python3 scripts/comparar.py pics-out/cpu_4096.pgm pics-out/gpu_4096.pgm
 ```
 
-A versão sequencial mostra **tempo de processamento** (sem E/S). A versão CUDA mede, no host, os lançamentos do kernel e a sincronização final; a alocação, a leitura e a escrita de arquivo ficam fora da medição. Ambas as versões fazem aquecimento antes das medições. Como a versão CUDA usa memória unificada, não há cópias H2D/D2H explícitas no código. Execute no mesmo computador e com a mesma imagem e número de repetições.
+A versão sequencial mostra **tempo de processamento** (sem E/S). A versão CUDA mede, no host, cada lançamento do kernel seguido de sua sincronização e divide o total pelo número de repetições; a alocação, a leitura e a escrita de arquivo ficam fora da medição. Ambas as versões fazem aquecimento antes das medições. Como a versão CUDA usa memória unificada, não há cópias H2D/D2H explícitas no código. Execute no mesmo computador e com a mesma imagem e número de repetições.
 
 ## Ideias para otimização CUDA
 

@@ -5,13 +5,24 @@
 
 
 #include <math.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <time.h>
+#endif
 #include "pgm.h"
 
 static double agora_segundos(void) {
+#ifdef _WIN32
+    LARGE_INTEGER frequencia, contador;
+    QueryPerformanceFrequency(&frequencia);
+    QueryPerformanceCounter(&contador);
+    return (double)contador.QuadPart / (double)frequencia.QuadPart;
+#else
     struct timespec t;
     clock_gettime(CLOCK_MONOTONIC, &t);
     return (double)t.tv_sec + (double)t.tv_nsec * 1e-9;
+#endif
 }
 
 
@@ -100,7 +111,6 @@ int main(int argc, char **argv) {
     inicio = agora_segundos();
     for (int i = 0; i < repeticoes; ++i)
         sobel_sequencial(entrada.pixels, saida.pixels, entrada.largura, entrada.altura);
-    
     
     
     
