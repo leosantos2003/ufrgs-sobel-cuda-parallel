@@ -15,7 +15,7 @@ except ImportError:
 
 
 RAIZ_PROJETO = Path(__file__).resolve().parents[1]
-DIRETORIO_SAIDA = RAIZ_PROJETO / "pics-out"
+DIRETORIO_SAIDA = RAIZ_PROJETO / "images" / "png-output"
 FORMATOS_ENTRADA = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".pgm"}
 FORMATOS_SAIDA = {".png": "PNG", ".jpg": "JPEG", ".jpeg": "JPEG"}
 
@@ -47,7 +47,7 @@ parser.add_argument(
 parser.add_argument(
     "--saida",
     type=Path,
-    help="nome do arquivo PNG/JPG/JPEG em pics-out/ (padrao: <entrada>_sobel.png)",
+    help="nome do arquivo PNG/JPG/JPEG em images/png-output/ (padrao: <entrada>_sobel.png)",
 )
 parser.add_argument(
     "--sobrescrever", action="store_true", help="permite substituir uma imagem de saida existente"
@@ -66,7 +66,7 @@ if args.saida is None:
     saida = DIRETORIO_SAIDA / f"{entrada.stem}_sobel.png"
 else:
     if args.saida.is_absolute() or args.saida.parent != Path("."):
-        parser.error("--saida deve informar somente um nome de arquivo; a saida e salva em pics-out/")
+        parser.error("--saida deve informar somente um nome de arquivo; a saida e salva em images/png-output/")
     saida = DIRETORIO_SAIDA / args.saida
 if saida.suffix.lower() not in FORMATOS_SAIDA:
     parser.error("a saida deve ter extensao .png, .jpg ou .jpeg")
