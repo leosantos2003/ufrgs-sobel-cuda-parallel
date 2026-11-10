@@ -1,5 +1,8 @@
-/* Filtro de Sobel em CUDA C++ (arquivo .cu; I/O compartilhado com a versao C). */
+// Filtro de Sobel em CUDA C++ (PGM P5, tons de cinza)
+
 #define _POSIX_C_SOURCE 200809L
+
+// CUDA 1: disponibiliza kernels e memória unificada
 #include <cuda_runtime.h>
 #include <math.h>
 #include <time.h>
@@ -11,16 +14,24 @@ static double agora_segundos(void) {
     return (double)t.tv_sec + (double)t.tv_nsec * 1e-9;
 }
 
-/* Cada thread CUDA calcula um pixel da imagem de saida. */
-__global__ void sobel_kernel(const unsigned char *entrada, unsigned char *saida,
-                             int largura, int altura) {
-    int x = blockIdx.x * blockDim.x + threadIdx.x;
-    int y = blockIdx.y * blockDim.y + threadIdx.y;
-    if (x >= largura || y >= altura) return;
+// CUDA 2: __global__ faz esta função executar na GPU.
+// Cada thread executa o mesmo cálculo de um pixel que seria feito por uma
+// iteração dos dois laços de sobel_sequencial.
 
-    int i = y * largura + x;
+__global__ void sobel_cuda(const unsigned char *entrada, unsigned char *saida,
+                           int largura, int altura) {
+    
+    // CUDA 3: substitui os laços y/x por um índice único da grade.
+    // Fórmula: blockIdx.x * blockDim.x + threadIdx.x
+
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int n = largura * altura;
+    if (i >= n) return; // A última grade pode ter threads sem pixel associado.
+
+    int y = i / largura;
+    int x = i % largura;
     if (x == 0 || y == 0 || x == largura - 1 || y == altura - 1) {
-        saida[i] = 0;
+        saida[i] = 0; // Borda: preta
         return;
     }
 
@@ -33,6 +44,7 @@ __global__ void sobel_kernel(const unsigned char *entrada, unsigned char *saida,
     int h = entrada[(y + 1) * largura + x];
     int j = entrada[(y + 1) * largura + (x + 1)];
 
+    // Máscaras Sobel 3x3: gradientes horizontal e vertical
     int gx = -a + c - 2 * d + 2 * f - g + j;
     int gy = -a - 2 * b - c + g + 2 * h + j;
     float magnitude = sqrtf((float)(gx * gx + gy * gy));
@@ -40,80 +52,21 @@ __global__ void sobel_kernel(const unsigned char *entrada, unsigned char *saida,
     saida[i] = (unsigned char)(magnitude + 0.5f);
 }
 
-static int executar_sobel_cuda(const ImagemPGM *entrada, ImagemPGM *saida,
-                              int repeticoes) {
-    unsigned char *d_entrada = NULL;
-    unsigned char *d_saida = NULL;
-    cudaEvent_t inicio_evento = NULL;
-    cudaEvent_t fim_evento = NULL;
-    size_t n = (size_t)entrada->largura * (size_t)entrada->altura;
-    dim3 bloco(16, 16);
-    dim3 grade(((unsigned)entrada->largura + bloco.x - 1) / bloco.x,
-               ((unsigned)entrada->altura + bloco.y - 1) / bloco.y);
-    float kernel_ms = 0.0f;
-    double soma_kernel_ms = 0.0, t0, t1;
-    int sucesso = 0;
-    cudaError_t erro;
 
-#define CUDA_VERIFICAR(chamada) do {                                           \
-    erro = (chamada);                                                        \
-    if (erro != cudaSuccess) {                                               \
-        fprintf(stderr, "CUDA: %s (linha %d): %s\n", #chamada, __LINE__,     \
-                cudaGetErrorString(erro));                                    \
-        goto limpar;                                                         \
-    }                                                                        \
-} while (0)
-
-    /* Inicializa CUDA e aloca memoria fora da regiao temporizada. */
-    CUDA_VERIFICAR(cudaFree(0));
-    CUDA_VERIFICAR(cudaMalloc((void **)&d_entrada, n));
-    CUDA_VERIFICAR(cudaMalloc((void **)&d_saida, n));
-    CUDA_VERIFICAR(cudaEventCreate(&inicio_evento));
-    CUDA_VERIFICAR(cudaEventCreate(&fim_evento));
-
-    /* Aquecimento da GPU fora da medicao (JIT/contexto/cache). */
-    CUDA_VERIFICAR(cudaMemcpy(d_entrada, entrada->pixels, n, cudaMemcpyHostToDevice));
-    sobel_kernel<<<grade, bloco>>>(d_entrada, d_saida, entrada->largura, entrada->altura);
-    CUDA_VERIFICAR(cudaGetLastError());
-    CUDA_VERIFICAR(cudaDeviceSynchronize());
-
-    t0 = agora_segundos();
-    for (int i = 0; i < repeticoes; ++i) {
-        /* Tempo total inclui H2D, kernel, D2H e sincronizacao. */
-        CUDA_VERIFICAR(cudaMemcpy(d_entrada, entrada->pixels, n, cudaMemcpyHostToDevice));
-        CUDA_VERIFICAR(cudaEventRecord(inicio_evento));
-        sobel_kernel<<<grade, bloco>>>(d_entrada, d_saida, entrada->largura, entrada->altura);
-        CUDA_VERIFICAR(cudaGetLastError());
-        CUDA_VERIFICAR(cudaEventRecord(fim_evento));
-        CUDA_VERIFICAR(cudaMemcpy(saida->pixels, d_saida, n, cudaMemcpyDeviceToHost));
-        CUDA_VERIFICAR(cudaEventElapsedTime(&kernel_ms, inicio_evento, fim_evento));
-        soma_kernel_ms += kernel_ms;
-    }
-    t1 = agora_segundos();
-
-    printf("Imagem: %d x %d pixels\n", entrada->largura, entrada->altura);
-    printf("Repeticoes: %d\n", repeticoes);
-    printf("Bloco CUDA: %u x %u threads\n", bloco.x, bloco.y);
-    printf("Tempo medio GPU (somente kernel): %.6f ms\n",
-           soma_kernel_ms / repeticoes);
-    printf("Tempo medio GPU (transferencias + kernel): %.6f ms\n",
-           1000.0 * (t1 - t0) / repeticoes);
-    sucesso = 1;
-
-limpar:
-    if (fim_evento) cudaEventDestroy(fim_evento);
-    if (inicio_evento) cudaEventDestroy(inicio_evento);
-    if (d_saida) cudaFree(d_saida);
-    if (d_entrada) cudaFree(d_entrada);
-    return sucesso;
-#undef CUDA_VERIFICAR
-}
 
 int main(int argc, char **argv) {
     ImagemPGM entrada = {0, 0, NULL};
     ImagemPGM saida = {0, 0, NULL};
     int repeticoes = 10;
+    size_t n;
+    double inicio, fim;
+    
     int ok;
+    
+    // CUDA 4: preserva o ponteiro host antes de usar memória unificada
+    unsigned char *entrada_host;
+    size_t threads_por_bloco = 256;
+    size_t numero_de_blocos;
 
     if (argc < 3 || argc > 4) {
         fprintf(stderr, "Uso: %s entrada.pgm saida.pgm [repeticoes]\n", argv[0]);
@@ -122,18 +75,48 @@ int main(int argc, char **argv) {
     if (argc == 4 && !ler_repeticoes(argv[3], &repeticoes)) return EXIT_FAILURE;
     if (!ler_pgm(argv[1], &entrada)) return EXIT_FAILURE;
 
+    n = (size_t)entrada.largura * (size_t)entrada.altura;
     saida.largura = entrada.largura;
     saida.altura = entrada.altura;
-    saida.pixels = (unsigned char *)malloc((size_t)saida.largura * saida.altura);
-    if (!saida.pixels) {
-        fprintf(stderr, "Falha ao alocar memoria para a saida.\n");
-        free(entrada.pixels);
-        return EXIT_FAILURE;
-    }
 
-    ok = executar_sobel_cuda(&entrada, &saida, repeticoes);
-    if (ok) ok = escrever_pgm(argv[2], &saida);
-    free(saida.pixels);
-    free(entrada.pixels);
+    // CUDA 5: cudaMallocManaged cria memória acessivel pela CPU e
+    // pela GPU. A imagem é lida inicialmente por ler_pgm em memória comum;
+    // por isso ela é copiada uma única vez para a memória unificada.
+
+    entrada_host = entrada.pixels;
+    cudaMallocManaged((void **)&entrada.pixels, n);
+    memcpy(entrada.pixels, entrada_host, n);
+    free(entrada_host);
+    cudaMallocManaged((void **)&saida.pixels, n);
+
+    // CUDA 6: a grade cobre todos os pixels, uma thread por pixel
+    numero_de_blocos = (n + threads_por_bloco - 1) / threads_por_bloco;
+
+    // CUDA 7: aquecimento e sincronização antes da região temporizada
+    sobel_cuda<<<numero_de_blocos, threads_por_bloco>>>(
+        entrada.pixels, saida.pixels, entrada.largura, entrada.altura);
+    cudaDeviceSynchronize();
+
+    inicio = agora_segundos();
+    for (int i = 0; i < repeticoes; ++i)
+        
+        // CUDA 8: a chamada <<<...>>> inicia o kernel na GPU
+        sobel_cuda<<<numero_de_blocos, threads_por_bloco>>>(
+            entrada.pixels, saida.pixels, entrada.largura, entrada.altura);
+    
+    // CUDA 9: espera o kernel terminar antes de encerrar a medição
+    cudaDeviceSynchronize();
+    fim = agora_segundos();
+
+    printf("Imagem: %d x %d pixels\n", entrada.largura, entrada.altura);
+    printf("Repeticoes: %d\n", repeticoes);
+    printf("Tempo medio GPU (kernel + sincronizacao): %.6f ms\n",
+           1000.0 * (fim - inicio) / repeticoes);
+
+    ok = escrever_pgm(argv[2], &saida);
+    
+    // CUDA 10: libera a memória unificada com cudaFree
+    cudaFree(saida.pixels);
+    cudaFree(entrada.pixels);
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

@@ -1,5 +1,9 @@
-/* Filtro de Sobel sequencial em C (PGM P5, tons de cinza). */
+// Filtro de Sobel sequencial em C (PGM P5, tons de cinza)
+
 #define _POSIX_C_SOURCE 200809L
+
+
+
 #include <math.h>
 #include <time.h>
 #include "pgm.h"
@@ -10,8 +14,13 @@ static double agora_segundos(void) {
     return (double)t.tv_sec + (double)t.tv_nsec * 1e-9;
 }
 
+
+
+
+
 static void sobel_sequencial(const unsigned char *entrada, unsigned char *saida,
                             int largura, int altura) {
+    
     for (int y = 0; y < altura; ++y) {
         for (int x = 0; x < largura; ++x) {
             int i = y * largura + x;
@@ -20,6 +29,12 @@ static void sobel_sequencial(const unsigned char *entrada, unsigned char *saida,
                 continue;
             }
 
+            
+            
+            
+            
+            
+            
             int a = entrada[(y - 1) * largura + (x - 1)];
             int b = entrada[(y - 1) * largura + x];
             int c = entrada[(y - 1) * largura + (x + 1)];
@@ -29,7 +44,7 @@ static void sobel_sequencial(const unsigned char *entrada, unsigned char *saida,
             int h = entrada[(y + 1) * largura + x];
             int j = entrada[(y + 1) * largura + (x + 1)];
 
-            /* Mascaras Sobel 3x3: gradientes horizontal e vertical. */
+            // Máscaras Sobel 3x3: gradientes horizontal e vertical
             int gx = -a + c - 2 * d + 2 * f - g + j;
             int gy = -a - 2 * b - c + g + 2 * h + j;
             float magnitude = sqrtf((float)(gx * gx + gy * gy));
@@ -46,6 +61,13 @@ int main(int argc, char **argv) {
     size_t n;
     double inicio, fim;
 
+    
+    
+    
+    
+    
+    
+    
     if (argc < 3 || argc > 4) {
         fprintf(stderr, "Uso: %s entrada.pgm saida.pgm [repeticoes]\n", argv[0]);
         return EXIT_FAILURE;
@@ -56,6 +78,10 @@ int main(int argc, char **argv) {
     n = (size_t)entrada.largura * (size_t)entrada.altura;
     saida.largura = entrada.largura;
     saida.altura = entrada.altura;
+
+    
+    
+    
     saida.pixels = (unsigned char *)malloc(n);
     if (!saida.pixels) {
         fprintf(stderr, "Falha ao alocar memoria para a saida.\n");
@@ -63,11 +89,23 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
+    
+    
+    
     /* Aquecimento fora da regiao temporizada. */
     sobel_sequencial(entrada.pixels, saida.pixels, entrada.largura, entrada.altura);
+    
+    
+    
     inicio = agora_segundos();
     for (int i = 0; i < repeticoes; ++i)
         sobel_sequencial(entrada.pixels, saida.pixels, entrada.largura, entrada.altura);
+    
+    
+    
+    
+    
+    
     fim = agora_segundos();
 
     printf("Imagem: %d x %d pixels\n", entrada.largura, entrada.altura);
@@ -76,6 +114,8 @@ int main(int argc, char **argv) {
            1000.0 * (fim - inicio) / repeticoes);
 
     int ok = escrever_pgm(argv[2], &saida);
+
+    
     free(saida.pixels);
     free(entrada.pixels);
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;

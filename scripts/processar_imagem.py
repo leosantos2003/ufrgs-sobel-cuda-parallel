@@ -74,7 +74,7 @@ if saida.resolve() == entrada:
 if saida.exists() and not args.sobrescrever:
     parser.error(f"a saida ja existe: {saida}. Use --sobrescrever para substitui-la")
 
-executavel = RAIZ_PROJETO / ("sobel_cuda" if args.modo == "gpu" else "sobel_seq")
+executavel = RAIZ_PROJETO / "src" / ("sobel_cuda" if args.modo == "gpu" else "sobel_seq")
 if not executavel.is_file():
     alvo = "gpu" if args.modo == "gpu" else "cpu"
     raise SystemExit(f"Executavel ausente. Compile primeiro com: make {alvo}")

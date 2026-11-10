@@ -3,7 +3,7 @@
 Este projeto implementa a **mesma** detecção de bordas por Sobel em C e CUDA.
 
 - `src/sobel_seq.c`: cálculo sequencial em CPU.
-- `src/sobel_cuda.cu`: um pixel de saída por thread CUDA (grade bidimensional, blocos 16x16).
+- `src/sobel_cuda.cu`: um pixel de saída por thread CUDA, em uma grade unidimensional.
 - `src/pgm.h`: leitura e escrita compartilhada do formato PGM binário de 8 bits.
 - `pics-in/`: imagens de entrada coloridas.
 - `pics-out/`: imagens produzidas pelo Sobel.
@@ -39,9 +39,9 @@ Quanto maior essa magnitude, mais forte é a transição local e mais claro ser�
 As duas versões produzem a mesma imagem e aplicam exatamente as máscaras acima:
 
 - Na versão sequencial, dois laços percorrem a imagem e calculam um pixel de saída por vez na CPU.
-- Na versão CUDA, a imagem é copiada para a GPU e cada thread calcula um pixel de saída. A grade é bidimensional e os blocos têm 16x16 threads; threads que ficariam fora das dimensões reais da imagem encerram sem acessar memória inválida.
+- Na versão CUDA, cada thread calcula um pixel de saída. A imagem é achatada em um vetor: o índice global da thread identifica o pixel, que é convertido de volta nas coordenadas `x` e `y`. A grade tem blocos de 256 threads; threads cujo índice ultrapassa o total de pixels encerram sem acessar memória inválida.
 
-A implementação CUDA é o baseline com leituras diretamente da memória global: cada thread lê a sua vizinhança 3x3. Assim, ela prioriza a clareza e a equivalência com a versão sequencial, deixando o uso de memória compartilhada como uma otimização posterior.
+A implementação CUDA usa memória unificada (`cudaMallocManaged`), cada thread lê diretamente a sua vizinhança 3x3 e a CPU sincroniza antes de usar o resultado. Ela prioriza a clareza e a equivalência com a versão sequencial, deixando o uso de memória compartilhada como uma otimização posterior.
 
 ## Requisitos
 
@@ -58,7 +58,7 @@ python3 -m pip install Pillow
 
 ## Organização
 
-- `src/`: código-fonte C/CUDA e cabeçalho compartilhado.
+- `src/`: código-fonte C/CUDA, cabeçalho compartilhado e executáveis gerados.
 - `pics-in/`: imagens de entrada (PNG, JPG, JPEG, TIFF ou PGM).
 - `pics-out/`: imagens de saída (PNG, JPG ou JPEG).
 - `scripts/`: utilitários Python para gerar imagens e comparar resultados.
@@ -75,8 +75,8 @@ make gpu       # nvcc, compila apenas a versão CUDA
 Sem `make`:
 
 ```bash
-gcc -O3 -std=c11 src/sobel_seq.c -o sobel_seq -lm
-nvcc -O3 src/sobel_cuda.cu -o sobel_cuda
+gcc -O3 -std=c11 src/sobel_seq.c -o src/sobel_seq -lm
+nvcc -O3 src/sobel_cuda.cu -o src/sobel_cuda
 ```
 
 ## Executar
@@ -89,21 +89,25 @@ python3 scripts/comparar.py pics-out/saida_seq.png pics-out/saida_cuda.png
 
 O último argumento é o número de repetições; se omitido, vale 10. As imagens geradas são arquivos PGM P5 (grayscale 8 bits, `maxval=255`). A borda externa de um pixel é preenchida com zero. Na aplicação sequencial e CUDA, a magnitude é `sqrt(Gx*Gx + Gy*Gy)`, saturada em 255 e arredondada para o inteiro mais próximo. Pequenas diferenças numéricas de 1 tom de cinza podem surgir por arredondamento em CPU/GPU.
 
-## Usar imagens PNG, JPG, JPEG ou TIFF
+## Converter suas imagens na CPU
 
-Coloque a imagem em `pics-in/` e execute o script abaixo depois de compilar a versão desejada. Ele converte a entrada para um PGM temporário em tons de cinza, executa o Sobel e grava o resultado em `pics-out/`. Os arquivos temporários são removidos automaticamente.
+Para aplicar o Sobel às suas imagens usando **apenas a CPU**, execute os comandos abaixo a partir da raiz do projeto. Troque `minha_foto.jpg` pelo nome do seu arquivo (PNG, JPG, JPEG ou TIFF). A imagem pode ficar em `pics-in/`, como no exemplo, ou em outro caminho válido.
 
 ```bash
+# 1. Compile a versão sequencial (CPU); basta fazer uma vez após cada alteração no código.
 make cpu
-python3 scripts/processar_imagem.py pics-in/foto.jpg
-# Resultado: pics-out/foto_sobel.png
+
+# 2. Converta e processe a imagem. O modo padrão do script já é CPU.
+python3 scripts/processar_imagem.py pics-in/minha_foto.jpg
 ```
 
-As imagens TIFF também podem ser usadas diretamente; por exemplo:
+O resultado será salvo como `pics-out/minha_foto_sobel.png`. O script converte a entrada para tons de cinza em um PGM temporário, executa o Sobel sequencial e remove os arquivos temporários ao terminar.
+
+Exemplos equivalentes para outros formatos:
 
 ```bash
-python3 scripts/processar_imagem.py pics-in/foto.tiff
-# Resultado: pics-out/foto_sobel.png
+python3 scripts/processar_imagem.py pics-in/minha_foto.png
+python3 scripts/processar_imagem.py pics-in/minha_foto.tiff
 ```
 
 Para usar a GPU, compile-a e selecione o modo correspondente:
@@ -126,18 +130,18 @@ python3 scripts/processar_imagem.py pics-in/foto.jpeg \
 python3 scripts/gerar_imagem.py 1024 1024 pics-in/imagem_1024.pgm
 python3 scripts/gerar_imagem.py 2048 2048 pics-in/imagem_2048.pgm
 python3 scripts/gerar_imagem.py 4096 4096 pics-in/imagem_4096.pgm
-./sobel_seq pics-in/imagem_4096.pgm pics-out/cpu_4096.pgm 30
-./sobel_cuda pics-in/imagem_4096.pgm pics-out/gpu_4096.pgm 30
+./src/sobel_seq pics-in/imagem_4096.pgm pics-out/cpu_4096.pgm 30
+./src/sobel_cuda pics-in/imagem_4096.pgm pics-out/gpu_4096.pgm 30
 python3 scripts/comparar.py pics-out/cpu_4096.pgm pics-out/gpu_4096.pgm
 ```
 
-A versão sequencial mostra **tempo de processamento** (sem E/S). A versão CUDA mostra dois tempos: (1) **somente kernel** por meio de `cudaEvent` e (2) **transferências H2D + kernel + D2H**, medido no host, com os buffers GPU previamente alocados. Para speedup fim a fim, prefira usar o segundo tempo; explique que a CPU já opera sobre dados na memória principal e que a GPU exige transferências. Ambas as versões fazem aquecimento antes das medições; leitura e escrita de arquivo não entram nos tempos. Execute no mesmo computador e com a mesma imagem e número de repetições.
+A versão sequencial mostra **tempo de processamento** (sem E/S). A versão CUDA mede, no host, os lançamentos do kernel e a sincronização final; a alocação, a leitura e a escrita de arquivo ficam fora da medição. Ambas as versões fazem aquecimento antes das medições. Como a versão CUDA usa memória unificada, não há cópias H2D/D2H explícitas no código. Execute no mesmo computador e com a mesma imagem e número de repetições.
 
 ## Ideias para otimização CUDA
 
-- Comparar blocos 8x8, 16x16 e 32x8 (altere `dim3 bloco(...)`).
+- Comparar 128, 256 e 512 threads por bloco (altere `threads_por_bloco`).
 - Usar memória compartilhada (`shared memory`) para carregar tiles com halo de 1 pixel.
 - Experimentar acesso via memória somente-leitura/texture e comparar tráfego global.
-- Medir o impacto de diferentes resoluções e a razão entre tempo de kernel e tempo de transferência.
+- Medir o impacto de diferentes resoluções.
 
-**Observação:** a implementação CUDA deste projeto é a versão básica global-memory, sem `shared memory`, para servir de baseline antes das otimizações.
+**Observação:** a implementação CUDA deste projeto usa memória unificada e não usa `shared memory`, para servir de baseline antes das otimizações.
