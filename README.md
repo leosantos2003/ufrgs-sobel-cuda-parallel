@@ -27,6 +27,10 @@ magnitude = sqrt(Gx² + Gy²)
 
 Quanto maior essa magnitude, mais forte é a transição local e mais claro será o pixel na imagem de saída. O resultado é limitado a 255, pois o PGM usado pelo projeto possui pixels de 8 bits (`0` = preto, `255` = branco), e depois é arredondado para o inteiro mais próximo. Os pixels da borda externa recebem zero (preto), pois não possuem todos os oito vizinhos necessários para formar uma janela 3x3.
 
+| Imagem original | Imagem com filtro aplicado |
+|---|---|
+| ![alt text](images/png-input/pic14.png) | ![alt text](images/png-output/pic14_cpu.png) |
+
 ## Como a implementação executa o Sobel
 
 As duas versões produzem a mesma imagem e aplicam exatamente as máscaras acima:
