@@ -1,28 +1,40 @@
-# Sobel 3x3: C sequencial e CUDA
+# Filtro de Sobel 3x3: implementação em CUDA e comparação de desempenho
 
-Este projeto implementa detecção de bordas por Sobel em C e CUDA.
+**UFGRS - INF01008 - Programação Paralela - 2026/2**
 
-## Teste rápido
+Este projeto implementa o algoritmo detecção de bordas de Sobel em C e CUDA e compara seus respectivos desempenhos.
 
-Execute na raiz do projeto. Este teste usa `images/pgm-input/pic1.pgm`, portanto **não requer Python nem Pillow**. O tempo médio aparece no terminal; as saídas ficam em `images/pgm-output/`.
+## O que é o Filtro de Sobel
 
-```bash
-# 1. Compilar e executar a versão CPU
-make cpu
-./src/sobel_seq images/pgm-input/pic1.pgm images/pgm-output/pic1_cpu.pgm 10
+O **Sobel** é um algoritmo de processamento de imagens que realça **bordas**: regiões nas quais a intensidade dos pixels muda de forma abrupta. Em uma foto em tons de cinza, por exemplo, essas mudanças normalmente correspondem aos contornos de objetos, letras, linhas e limites entre áreas claras e escuras. A imagem de saída não é uma cópia colorida ou suavizada da entrada; ela representa a **força das bordas** encontradas em cada posição.
 
-# 2. Compilar e executar a versão GPU
-make gpu
-./src/sobel_cuda images/pgm-input/pic1.pgm images/pgm-output/pic1_gpu.pgm 10
+Para calcular cada pixel de saída, o algoritmo observa uma janela 3x3 centrada no pixel correspondente da imagem de entrada. Nessa janela, ele aplica duas máscaras (convoluções):
+
+```text
+Gx = [-1  0  1]       Gy = [-1 -2 -1]
+     [-2  0  2]            [ 0  0  0]
+     [-1  0  1]            [ 1  2  1]
 ```
 
-No Windows, use um terminal com `gcc`, `nvcc` e GNU Make no `PATH`. Se necessário, substitua `make` por `mingw32-make`; para executar os binários, use `src\sobel_seq.exe` e `src\sobel_cuda.exe`. No macOS, somente o teste CPU é suportado: CUDA exige uma GPU NVIDIA compatível, indisponível nos Macs atuais.
+- `Gx` mede a variação da intensidade da esquerda para a direita e, portanto, destaca principalmente bordas verticais.
+- `Gy` mede a variação de cima para baixo e destaca principalmente bordas horizontais.
 
-## Requisitos
+Em seguida, o programa combina os dois gradientes com a magnitude
 
-- Um compilador C compatível com C11 (`gcc`) e GNU Make para a versão CPU.
-- NVIDIA CUDA Toolkit (`nvcc`) e GPU NVIDIA compatível com CUDA para a versão GPU.
-- Python 3 e Pillow somente para os testes que usam PNG/JPG/JPEG/TIFF.
+```text
+magnitude = sqrt(Gx² + Gy²)
+```
+
+Quanto maior essa magnitude, mais forte é a transição local e mais claro será o pixel na imagem de saída. O resultado é limitado a 255, pois o PGM usado pelo projeto possui pixels de 8 bits (`0` = preto, `255` = branco), e depois é arredondado para o inteiro mais próximo. Os pixels da borda externa recebem zero (preto), pois não possuem todos os oito vizinhos necessários para formar uma janela 3x3.
+
+## Como a implementação executa o Sobel
+
+As duas versões produzem a mesma imagem e aplicam exatamente as máscaras acima:
+
+- Na versão sequencial, dois laços percorrem a imagem e calculam um pixel de saída por vez na CPU.
+- Na versão CUDA, cada thread calcula um pixel de saída. A imagem é achatada em um vetor: o índice global da thread identifica o pixel, que é convertido de volta nas coordenadas `x` e `y`. A grade tem blocos de 256 threads; threads cujo índice ultrapassa o total de pixels encerram sem acessar memória inválida.
+
+A implementação CUDA usa memória unificada (`cudaMallocManaged`), cada thread lê diretamente a sua vizinhança 3x3 e a CPU sincroniza antes de usar o resultado. Ela prioriza a clareza e a equivalência com a versão sequencial, deixando o uso de memória compartilhada como uma otimização posterior.
 
 ## Organização de arquivos e pastas
 
@@ -49,6 +61,28 @@ No Windows, use um terminal com `gcc`, `nvcc` e GNU Make no `PATH`. Se necessár
 ├── Makefile
 └── README.md
 ```
+
+## Requisitos
+
+- Um compilador C compatível com C11 (`gcc`) e GNU Make para a versão CPU.
+- NVIDIA CUDA Toolkit (`nvcc`) e GPU NVIDIA compatível com CUDA para a versão GPU.
+- Python 3 e Pillow somente para os testes que usam PNG/JPG/JPEG/TIFF.
+
+## Teste rápido
+
+Execute na raiz do projeto. Este teste usa `images/pgm-input/pic1.pgm`, portanto **não requer Python nem Pillow**. O tempo médio aparece no terminal; as saídas ficam em `images/pgm-output/`.
+
+```bash
+# 1. Compilar e executar a versão CPU
+make cpu
+./src/sobel_seq images/pgm-input/pic1.pgm images/pgm-output/pic1_cpu.pgm 10
+
+# 2. Compilar e executar a versão GPU
+make gpu
+./src/sobel_cuda images/pgm-input/pic1.pgm images/pgm-output/pic1_gpu.pgm 10
+```
+
+No Windows, use um terminal com `gcc`, `nvcc` e GNU Make no `PATH`. Se necessário, substitua `make` por `mingw32-make`; para executar os binários, use `src\sobel_seq.exe` e `src\sobel_cuda.exe`. No macOS, somente o teste CPU é suportado: CUDA exige uma GPU NVIDIA compatível, indisponível nos Macs atuais.
 
 ## Teste rápido com PNG (opcional)
 
@@ -83,38 +117,6 @@ python scripts/processar_imagem.py images/png-input/pic1.png --modo gpu --saida 
 ```
 
 As saídas são gravadas em `images/png-output/`.
-
-## O algoritmo: filtro de Sobel 3x3
-
-O **Sobel** é um algoritmo de processamento de imagens que realça **bordas**: regiões nas quais a intensidade dos pixels muda de forma abrupta. Em uma foto em tons de cinza, por exemplo, essas mudanças normalmente correspondem aos contornos de objetos, letras, linhas e limites entre áreas claras e escuras. A imagem de saída não é uma cópia colorida ou suavizada da entrada; ela representa a **força das bordas** encontradas em cada posição.
-
-Para calcular cada pixel de saída, o algoritmo observa uma janela 3x3 centrada no pixel correspondente da imagem de entrada. Nessa janela, ele aplica duas máscaras (convoluções):
-
-```text
-Gx = [-1  0  1]       Gy = [-1 -2 -1]
-     [-2  0  2]            [ 0  0  0]
-     [-1  0  1]            [ 1  2  1]
-```
-
-- `Gx` mede a variação da intensidade da esquerda para a direita e, portanto, destaca principalmente bordas verticais.
-- `Gy` mede a variação de cima para baixo e destaca principalmente bordas horizontais.
-
-Em seguida, o programa combina os dois gradientes com a magnitude
-
-```text
-magnitude = sqrt(Gx² + Gy²)
-```
-
-Quanto maior essa magnitude, mais forte é a transição local e mais claro será o pixel na imagem de saída. O resultado é limitado a 255, pois o PGM usado pelo projeto possui pixels de 8 bits (`0` = preto, `255` = branco), e depois é arredondado para o inteiro mais próximo. Os pixels da borda externa recebem zero (preto), pois não possuem todos os oito vizinhos necessários para formar uma janela 3x3.
-
-## Como a implementação executa o Sobel
-
-As duas versões produzem a mesma imagem e aplicam exatamente as máscaras acima:
-
-- Na versão sequencial, dois laços percorrem a imagem e calculam um pixel de saída por vez na CPU.
-- Na versão CUDA, cada thread calcula um pixel de saída. A imagem é achatada em um vetor: o índice global da thread identifica o pixel, que é convertido de volta nas coordenadas `x` e `y`. A grade tem blocos de 256 threads; threads cujo índice ultrapassa o total de pixels encerram sem acessar memória inválida.
-
-A implementação CUDA usa memória unificada (`cudaMallocManaged`), cada thread lê diretamente a sua vizinhança 3x3 e a CPU sincroniza antes de usar o resultado. Ela prioriza a clareza e a equivalência com a versão sequencial, deixando o uso de memória compartilhada como uma otimização posterior.
 
 ## Outros comandos de terminal
 
@@ -173,3 +175,7 @@ A versão sequencial mostra **tempo de processamento** (sem E/S). A versão CUDA
 - Medir o impacto de diferentes resoluções.
 
 **Observação:** a implementação CUDA deste projeto usa memória unificada e não usa `shared memory`, para servir de baseline antes das otimizações.
+
+## License
+
+Distributed under the MIT License. See `LICENSE.txt` for more information.
