@@ -29,6 +29,17 @@ static double agora_segundos(void) {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
 static void sobel_sequencial(const unsigned char *entrada, unsigned char *saida,
                             int largura, int altura) {
     
@@ -79,6 +90,7 @@ int main(int argc, char **argv) {
     
     
     
+    
     if (argc < 3 || argc > 4) {
         fprintf(stderr, "Uso: %s entrada.pgm saida.pgm [repeticoes]\n", argv[0]);
         return EXIT_FAILURE;
@@ -93,6 +105,7 @@ int main(int argc, char **argv) {
     
     
     
+    
     saida.pixels = (unsigned char *)malloc(n);
     if (!saida.pixels) {
         fprintf(stderr, "Falha ao alocar memoria para a saida.\n");
@@ -102,15 +115,28 @@ int main(int argc, char **argv) {
 
     
     
-    
     /* Aquecimento fora da regiao temporizada. */
     sobel_sequencial(entrada.pixels, saida.pixels, entrada.largura, entrada.altura);
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     
     
     
     inicio = agora_segundos();
     for (int i = 0; i < repeticoes; ++i)
         sobel_sequencial(entrada.pixels, saida.pixels, entrada.largura, entrada.altura);
+    
+    
+    
     
     
     
@@ -125,6 +151,9 @@ int main(int argc, char **argv) {
 
     int ok = escrever_pgm(argv[2], &saida);
 
+    
+    
+    
     
     free(saida.pixels);
     free(entrada.pixels);

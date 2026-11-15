@@ -219,7 +219,7 @@ make
 | `nvcc: No such file or directory` ou `nvcc` não é reconhecido | Instale o CUDA Toolkit; o driver NVIDIA sozinho não inclui o `nvcc`. Abra um novo terminal e confira `nvcc --version`. |
 | `Cannot find compiler 'cl.exe'` | Instale **Desktop development with C++** e o **MSVC v143 x64/x86**. Compile no **x64 Native Tools Command Prompt for VS 2022**. |
 | `make: Nothing to be done for 'cpu'` ou `gpu` | Não é erro: o executável já está atualizado. Para recompilar à força, use `make -B cpu` ou `make -B gpu`. |
-| `WinError 4551` / política de Controle de Aplicativo | O Windows bloqueou um executável local por política de segurança. Verifique `Applications and Services Logs > Microsoft > Windows > CodeIntegrity > Operational` no Visualizador de Eventos e solicite ao administrador/à TI uma regra que permita o executável. Não desative políticas de segurança para contornar o bloqueio. |
+| `WinError 4551` / política de Controle de Aplicativo | O Windows bloqueou um executável local por política de segurança. O experimento encerra com uma mensagem clara e registra o caso no log. Verifique `Applications and Services Logs > Microsoft > Windows > CodeIntegrity > Operational` no Visualizador de Eventos e solicite ao administrador/à TI uma regra que permita `src\sobel_cuda.exe`. Não desative políticas de segurança para contornar o bloqueio. |
 
 ### Processar outra imagem
 
@@ -251,6 +251,48 @@ python3 scripts/comparar.py images/pgm-output/cpu_4096.pgm images/pgm-output/gpu
 ```
 
 A versão sequencial mostra **tempo de processamento** (sem E/S). A versão CUDA mede, no host, cada lançamento do kernel seguido de sua sincronização e divide o total pelo número de repetições; a alocação, a leitura e a escrita de arquivo ficam fora da medição. Ambas as versões fazem aquecimento antes das medições. Como a versão CUDA usa memória unificada, não há cópias H2D/D2H explícitas no código. Execute no mesmo computador e com a mesma imagem e número de repetições.
+
+## Experimento CPU x CUDA
+
+O experimento definido em [PROPOSTA_EXPERIMENTO.md](PROPOSTA_EXPERIMENTO.md) está automatizado. Ele compila uma vez, gera as cinco imagens quadradas, executa cada implementação cinco vezes com 30 repetições internas, compara as saídas com tolerância zero e produz a tabela, os dados brutos, a configuração da máquina e os dois gráficos solicitados.
+
+No terminal configurado para CUDA, execute:
+
+```bash
+make experimento
+```
+
+Ou, se os executáveis já estiverem compilados:
+
+```bash
+python3 scripts/executar_experimento.py --sem-compilar
+```
+
+No Windows, substitua `python3` por `py`. Os arquivos são criados em `resultados/experimento/` (uma pasta ignorada pelo Git, pois medições dependem da máquina):
+
+```text
+resultados/experimento/
+├── relatorio.md            # tabela preenchida, configuração e interpretação
+├── medicoes_brutas.csv     # uma linha por tentativa
+├── ambiente.json           # hardware, SO, CUDA e compiladores detectados
+├── tempo_medio.svg         # CPU e GPU na mesma escala de tempo
+├── speedup.svg             # speedup com referência em 1×
+├── entradas/ e saidas/     # PGM sintéticos e resultados finais
+└── logs/                   # saída de cada execução e das comparações
+```
+
+Os gráficos são SVGs vetoriais, sem dependências Python extras. Eles usam rótulos diretos, cores distinguíveis, grade discreta e eixos com unidades; o gráfico de speedup também marca explicitamente o limiar de 1×. Caso uma resolução falhe na GPU, o motivo é registrado e, por padrão, as resoluções maiores são puladas. Para ainda tentá-las, use `--continuar-apos-falha-gpu`.
+
+### Arquitetura CUDA
+
+O projeto usa `sm_89` por padrão, apropriado para a RTX 4050 (Ada) usada neste ambiente. Para outra GPU, consulte sua capacidade e recompile com a arquitetura correspondente; por exemplo, para uma GPU `8.6`:
+
+```bat
+nvidia-smi --query-gpu=name,compute_cap --format=csv,noheader
+make -B gpu CUDA_ARCH=sm_86
+```
+
+O executável verifica as chamadas CUDA que podem falhar. Assim, uma arquitetura incompatível deixa de produzir uma imagem preta e um speedup falso: o programa informa o erro CUDA e termina sem registrar a medição como válida.
 
 ## License
 

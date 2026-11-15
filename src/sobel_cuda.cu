@@ -29,6 +29,17 @@ static double agora_segundos(void) {
 // Cada thread executa o mesmo cálculo de um pixel que seria feito por uma
 // iteração dos dois laços de sobel_sequencial.
 
+/*
+ * Sem estas verificacoes, um erro de lancamento (por exemplo, binario
+ * compilado para uma arquitetura CUDA incompativel) deixaria a saida sem ser
+ * calculada e produziria tempos artificialmente pequenos.
+ */
+static int verificar_cuda(cudaError_t erro, const char *operacao) {
+    if (erro == cudaSuccess) return 1;
+    fprintf(stderr, "Erro CUDA em %s: %s\n", operacao, cudaGetErrorString(erro));
+    return 0;
+}
+
 __global__ void sobel_cuda(const unsigned char *entrada, unsigned char *saida,
                            int largura, int altura) {
     
@@ -72,7 +83,8 @@ int main(int argc, char **argv) {
     size_t n;
     double inicio, fim;
     
-    int ok;
+    int ok = 0;
+    int retorno = EXIT_FAILURE;
     
     // CUDA 4: preserva o ponteiro host antes de usar memória unificada
     unsigned char *entrada_host;
@@ -95,10 +107,18 @@ int main(int argc, char **argv) {
     // por isso ela é copiada uma única vez para a memória unificada.
 
     entrada_host = entrada.pixels;
-    cudaMallocManaged((void **)&entrada.pixels, n);
+    entrada.pixels = NULL;
+    if (!verificar_cuda(cudaMallocManaged((void **)&entrada.pixels, n),
+                        "cudaMallocManaged da entrada")) {
+        free(entrada_host);
+        return EXIT_FAILURE;
+    }
     memcpy(entrada.pixels, entrada_host, n);
     free(entrada_host);
-    cudaMallocManaged((void **)&saida.pixels, n);
+    if (!verificar_cuda(cudaMallocManaged((void **)&saida.pixels, n),
+                        "cudaMallocManaged da saida")) {
+        goto liberar_memoria;
+    }
 
     // CUDA 6: a grade cobre todos os pixels, uma thread por pixel
     numero_de_blocos = (n + threads_por_bloco - 1) / threads_por_bloco;
@@ -106,7 +126,10 @@ int main(int argc, char **argv) {
     // CUDA 7: aquecimento e sincronização antes da região temporizada
     sobel_cuda<<<numero_de_blocos, threads_por_bloco>>>(
         entrada.pixels, saida.pixels, entrada.largura, entrada.altura);
-    cudaDeviceSynchronize();
+    if (!verificar_cuda(cudaGetLastError(), "lancamento do kernel de aquecimento") ||
+        !verificar_cuda(cudaDeviceSynchronize(), "sincronizacao do aquecimento")) {
+        goto liberar_memoria;
+    }
 
     inicio = agora_segundos();
     for (int i = 0; i < repeticoes; ++i) {
@@ -114,7 +137,10 @@ int main(int argc, char **argv) {
         sobel_cuda<<<numero_de_blocos, threads_por_bloco>>>(
             entrada.pixels, saida.pixels, entrada.largura, entrada.altura);
         // CUDA 9: cada repeticao espera o kernel terminar antes da proxima.
-        cudaDeviceSynchronize();
+        if (!verificar_cuda(cudaGetLastError(), "lancamento do kernel") ||
+            !verificar_cuda(cudaDeviceSynchronize(), "sincronizacao do kernel")) {
+            goto liberar_memoria;
+        }
     }
     fim = agora_segundos();
 
@@ -124,9 +150,12 @@ int main(int argc, char **argv) {
            1000.0 * (fim - inicio) / repeticoes);
 
     ok = escrever_pgm(argv[2], &saida);
+    retorno = ok ? EXIT_SUCCESS : EXIT_FAILURE;
+
+liberar_memoria:
     
     // CUDA 10: libera a memória unificada com cudaFree
-    cudaFree(saida.pixels);
-    cudaFree(entrada.pixels);
-    return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+    if (saida.pixels) cudaFree(saida.pixels);
+    if (entrada.pixels) cudaFree(entrada.pixels);
+    return retorno;
 }
