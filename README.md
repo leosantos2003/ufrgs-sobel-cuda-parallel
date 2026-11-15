@@ -268,7 +268,7 @@ Ou, se os executáveis já estiverem compilados:
 python3 scripts/executar_experimento.py --sem-compilar
 ```
 
-No Windows, substitua `python3` por `py`. Os arquivos são criados em `resultados/experimento/` (uma pasta ignorada pelo Git, pois medições dependem da máquina):
+No Windows, substitua `python3` por `py`. Os arquivos são criados em `resultados/experimento/` (pode-se fazer a pasta ser ignorada pelo Git, pois medições dependem da máquina):
 
 ```text
 resultados/experimento/

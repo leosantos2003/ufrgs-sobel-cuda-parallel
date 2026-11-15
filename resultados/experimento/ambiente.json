@@ -1,0 +1,11 @@
+{
+  "gerado_em_utc": "2026-11-15T03:58:31+00:00",
+  "sistema_operacional": "Windows-11-10.0.26200-SP0",
+  "cpu": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+  "ram": "15.7 GiB",
+  "gpu": "NVIDIA GeForce RTX 4050 Laptop GPU, 6141 MiB, 617.14",
+  "cuda_toolkit": "nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2026 NVIDIA Corporation\nBuilt on Sun_Oct_12_19:25:36_Pacific_Standard_Time_2026\nCuda compilation tools, release 13.5, V13.5.37\nBuild cuda_13.5.r13.5/compiler.39125733_0",
+  "compilador_c": "gcc (Rev7, Built by MSYS2 project) 16.2.0",
+  "python": "3.14.8 (tags/v3.14.8:8e6e75d, Sep 30 2026, 18:19:33) [MSC v.1944 64 bit (AMD64)]",
+  "plataforma_python": "CPython"
+}

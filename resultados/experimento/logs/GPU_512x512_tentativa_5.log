@@ -1,0 +1,3 @@
+Imagem: 512 x 512 pixels
+Repeticoes: 30
+Tempo medio GPU (kernel + sincronizacao por repeticao): 0.019467 ms
