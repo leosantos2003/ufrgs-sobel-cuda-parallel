@@ -103,9 +103,19 @@ try:
             check=True,
         )
 
-        with Image.open(saida_pgm) as resultado:
+        # Cria uma copia independente antes de fechar o PGM temporario. No
+        # Windows, manter uma imagem do Pillow associada ao arquivo impede que
+        # TemporaryDirectory remova ``saida.pgm`` ao sair deste bloco.
+        resultado = Image.open(saida_pgm)
+        try:
             resultado.load()
-            resultado.convert("L").save(saida, format=FORMATOS_SAIDA[saida.suffix.lower()])
+            resultado_cinza = resultado.convert("L").copy()
+        finally:
+            resultado.close()
+        try:
+            resultado_cinza.save(saida, format=FORMATOS_SAIDA[saida.suffix.lower()])
+        finally:
+            resultado_cinza.close()
 except subprocess.CalledProcessError as erro:
     raise SystemExit(f"A execucao do Sobel falhou (codigo {erro.returncode}).")
 except OSError as erro:

@@ -1,2 +1,4 @@
 cuda_content_learned/
 graphics-material/
+.venv/
+.vscode/
